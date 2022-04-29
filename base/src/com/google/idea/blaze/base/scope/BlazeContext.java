@@ -20,6 +20,7 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.idea.blaze.base.sync.SyncResult;
+import java.util.ArrayList;
 import java.util.List;
 import javax.annotation.Nullable;
 
@@ -29,6 +30,9 @@ public class BlazeContext {
   @Nullable private BlazeContext parentContext;
 
   private final List<BlazeScope> scopes = Lists.newArrayList();
+
+  // List of all active child contexts.
+  private final List<BlazeContext> childContexts = Lists.newArrayList();
 
   private final ListMultimap<Class<? extends Output>, OutputSink<?>> outputSinks =
       ArrayListMultimap.create();
@@ -41,8 +45,6 @@ public class BlazeContext {
   private boolean hasErrors;
   private boolean propagatesErrors = true;
 
-  private final Runnable cancelThis = this::setCancelled;
-
   private BlazeContext(@Nullable BlazeContext parentContext) {
     this.parentContext = parentContext;
   }
@@ -54,7 +56,7 @@ public class BlazeContext {
   public static BlazeContext create(BlazeContext parentContext) {
     BlazeContext context = new BlazeContext(parentContext);
     if (parentContext != null) {
-      parentContext.addCancellationHandler(context.cancelThis);
+      parentContext.addChildContext(context);
     }
     return context;
   }
@@ -76,7 +78,7 @@ public class BlazeContext {
     }
 
     if (parentContext != null) {
-      parentContext.removeCancellationHandler(cancelThis);
+      parentContext.removeChildContext(this);
       if (hasErrors && propagatesErrors) {
         parentContext.setHasError();
       }
@@ -94,12 +96,25 @@ public class BlazeContext {
     }
 
     isCancelled = true;
-    for (Runnable handler : cancellationHandlers) {
+
+    List<Runnable> handlers;
+    synchronized (this) {
+      handlers = new ArrayList<>(cancellationHandlers);
+    }
+    for (Runnable handler : handlers) {
       handler.run();
     }
 
     if (parentContext != null) {
       parentContext.setCancelled();
+    }
+
+    List<BlazeContext> childrenToCancel;
+    synchronized (this) {
+      childrenToCancel = new ArrayList<>(childContexts);
+    }
+    for (BlazeContext childContext : childrenToCancel) {
+      childContext.setCancelled();
     }
   }
 
@@ -266,6 +281,14 @@ public class BlazeContext {
   /** Unregisters a cancellation handler */
   public synchronized void removeCancellationHandler(Runnable handler) {
     this.cancellationHandlers.remove(handler);
+  }
+
+  private synchronized void addChildContext(BlazeContext childContext) {
+    this.childContexts.add(childContext);
+  }
+
+  private synchronized void removeChildContext(BlazeContext childContext) {
+    this.childContexts.remove(childContext);
   }
 
   public SyncResult getSyncResult() {
