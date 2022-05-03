@@ -61,10 +61,10 @@ import javax.annotation.Nullable;
 final class ProjectStateSyncTask {
 
   @Nullable
-  static SyncProjectState collectProjectState(Project project, BlazeContext context) {
+  static SyncProjectState collectProjectState(Project project, BlazeContext context)
+      throws SyncCanceledException, SyncFailedException {
     ProjectStateSyncTask task = new ProjectStateSyncTask(project);
-    // TODO(brendandouglas): capture timing information
-    return SyncScope.push(context, task::getProjectState);
+    return task.getProjectState(context);
   }
 
   private final Project project;
