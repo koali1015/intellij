@@ -400,7 +400,6 @@ final class SyncPhaseCoordinator {
     Instant startTime = Instant.now();
     int buildId = nextBuildId.getAndIncrement();
     try {
-      SaveUtil.saveAllFiles();
       onSyncStart(project, context, params.syncMode());
       if (!context.shouldContinue()) {
         finishSync(
