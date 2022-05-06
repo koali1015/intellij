@@ -24,7 +24,6 @@ import com.intellij.usages.TextChunk;
 import com.intellij.util.Restarter;
 import com.intellij.util.indexing.diagnostic.dto.JsonDuration;
 import com.intellij.util.indexing.diagnostic.dto.JsonFileProviderIndexStatistics;
-import com.intellij.util.indexing.roots.kind.LibraryOrigin;
 import com.intellij.util.ui.VcsExecutablePathSelector;
 import com.intellij.vcs.log.VcsLogProperties;
 import com.intellij.vcs.log.VcsLogProperties.VcsLogProperty;
@@ -131,12 +130,6 @@ public final class BaseSdkCompat {
   public static JsonDuration getTotalIndexingTime(
       JsonFileProviderIndexStatistics providerStatisticInput) {
     return providerStatisticInput.getTotalIndexingVisibleTime();
-  }
-
-  /** #api213: inline this method. */
-  public static String getLibraryNameFromLibraryOrigin(LibraryOrigin libraryOrigin) {
-    // TODO(b/230430213): adapt getLibraryNameFromLibraryOrigin to work in 221
-    return "";
   }
 
   /** #api213: Inline into KytheRenameProcessor. */

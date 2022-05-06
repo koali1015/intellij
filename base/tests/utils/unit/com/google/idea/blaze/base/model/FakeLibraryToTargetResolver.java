@@ -15,29 +15,31 @@
  */
 package com.google.idea.blaze.base.model;
 
+import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.ImmutableSet;
 import com.google.idea.blaze.base.model.primitives.Label;
 import com.intellij.openapi.project.Project;
 import java.util.Optional;
-import org.jetbrains.annotations.Nullable;
 
 /**
- * Allows to pass a target name during instance creation and then will always resolve to that target
- * name.
+ * Allows to pass a map of {@link LibraryKey} to {@link Label} at instance creation that is used to
+ * resolve {@link Label}s.
  */
 public final class FakeLibraryToTargetResolver implements LibraryToTargetResolver {
 
-  @Nullable private final Label label;
+  private final ImmutableMap<LibraryKey, Label> libraryKeyToLabelMap;
 
-  private FakeLibraryToTargetResolver(@Nullable Label label) {
-    this.label = label;
+  public FakeLibraryToTargetResolver(ImmutableMap<LibraryKey, Label> libraryKeyToLabelMap) {
+    this.libraryKeyToLabelMap = libraryKeyToLabelMap;
   }
 
-  public static FakeLibraryToTargetResolver create(@Nullable Label label) {
-    return new FakeLibraryToTargetResolver(label);
+  @Override
+  public ImmutableSet<Label> doGetAllTargetLabelsForProject(Project project) {
+    return ImmutableSet.copyOf(libraryKeyToLabelMap.values());
   }
 
   @Override
   public Optional<Label> resolveLibraryToTarget(Project project, LibraryKey library) {
-    return Optional.ofNullable(label);
+    return Optional.ofNullable(libraryKeyToLabelMap.get(library));
   }
 }

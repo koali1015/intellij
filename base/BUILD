@@ -244,8 +244,8 @@ java_library(
     visibility = G3PLUGINS_VISIBILITY,
     deps = [
         ":label_api",
-        "//base:proto_wrapper",
-        "//intellij_platform_sdk:jsr305",
+        ":proto_wrapper",
+        "//intellij_platform_sdk:jsr305",  # used for the Immutable annotation
         "//intellij_platform_sdk:plugin_api",
     ],
 )

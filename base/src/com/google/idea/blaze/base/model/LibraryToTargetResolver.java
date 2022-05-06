@@ -15,8 +15,10 @@
  */
 package com.google.idea.blaze.base.model;
 
+import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static java.util.Arrays.stream;
 
+import com.google.common.collect.ImmutableSet;
 import com.google.idea.blaze.base.model.primitives.Label;
 import com.intellij.openapi.extensions.ExtensionPointName;
 import com.intellij.openapi.project.Project;
@@ -41,6 +43,15 @@ public interface LibraryToTargetResolver {
         .flatMap(Optional::stream)
         .findAny();
   }
+
+  static ImmutableSet<Label> getAllLabelsForProject(Project project) {
+    return stream(EP_NAME.getExtensions())
+        .map(x -> x.doGetAllTargetLabelsForProject(project))
+        .flatMap(ImmutableSet::stream)
+        .collect(toImmutableSet());
+  }
+
+  ImmutableSet<Label> doGetAllTargetLabelsForProject(Project project);
 
   Optional<Label> resolveLibraryToTarget(Project project, LibraryKey library);
 }
