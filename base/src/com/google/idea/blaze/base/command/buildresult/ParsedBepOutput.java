@@ -42,6 +42,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Queue;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -56,6 +57,8 @@ public final class ParsedBepOutput {
 
   public static ParsedBepOutput parseBepArtifacts(BuildEventStreamProvider stream)
       throws BuildEventStreamException {
+    stringPool.onInvocationStart();
+
     BuildEventStreamProtos.BuildEvent event;
     Map<String, String> configIdToMnemonic = new HashMap<>();
     Set<String> topLevelFileSets = new HashSet<>();
@@ -78,7 +81,7 @@ public final class ParsedBepOutput {
               event.getId().getConfiguration().getId(), event.getConfiguration().getMnemonic());
           continue;
         case NAMED_SET:
-          NamedSetOfFiles namedSet = event.getNamedSetOfFiles();
+          NamedSetOfFiles namedSet = internNamedSet(event.getNamedSetOfFiles(), stringPool);
           fileSets.compute(
               event.getId().getNamedSet().getId(),
               (k, v) ->
@@ -120,13 +123,15 @@ public final class ParsedBepOutput {
       }
     }
     // If stream is empty, it means that service failed to retrieve any blaze build event from build
-    // event stream. This should not happened if a build start correctly.
+    // event stream. This should not happen if a build start correctly.
     if (emptyBuildEventStream) {
+      stringPool.onInvocationEnd();
       throw new BuildEventStreamException("No build events found");
     }
     ImmutableMap<String, FileSet> filesMap =
         fillInTransitiveFileSetData(
             fileSets, topLevelFileSets, configIdToMnemonic, startTimeMillis);
+    stringPool.onInvocationEnd();
     return new ParsedBepOutput(
         buildId,
         localExecRoot,
@@ -340,5 +345,62 @@ public final class ParsedBepOutput {
             namedSet, configIdToMnemonic.get(configId), startTimeMillis, outputGroups, targets);
       }
     }
+  }
+
+  private static final BepStringPool stringPool = new BepStringPool();
+
+  /**
+   * A basic object pool for interning strings from BEP proto messages within a single invocation
+   * and across concurrent parsing operations, which may have events for the same file sets.
+   *
+   * <p>Strings are stored in a ConcurrentHashMap
+   *
+   * <p>The pool keeps track of the number of current parsing invocations via the startInvocation
+   * and endInvocation methods. The string pool is cleared if there are no current parsing
+   * operations.
+   */
+  private static class BepStringPool {
+    private int invocationCount = 0;
+    private final Map<String, String> pool = new ConcurrentHashMap<>();
+
+    public synchronized void onInvocationStart() {
+      invocationCount++;
+    }
+
+    public synchronized void onInvocationEnd() {
+      invocationCount--;
+      if (invocationCount == 0) {
+        pool.clear();
+      }
+    }
+
+    public String get(String s) {
+      return pool.computeIfAbsent(s, (key) -> s);
+    }
+  }
+
+  // Returns a copy of a NamedFileSet with strings references stored in a Bep the
+  private static NamedSetOfFiles internNamedSet(
+      NamedSetOfFiles namedSet, BepStringPool bepStringPool) {
+    return namedSet.toBuilder()
+        .clearFiles()
+        .addAllFiles(
+            namedSet.getFilesList().stream()
+                .map(
+                    file ->
+                        file.toBuilder()
+                            .clearPathPrefix()
+                            // The digest is not used when parsing output artifacts
+                            .clearDigest()
+                            .setDigest("")
+                            .setUri(bepStringPool.get(file.getUri()))
+                            .setName(bepStringPool.get(file.getName()))
+                            .addAllPathPrefix(
+                                file.getPathPrefixList().stream()
+                                    .map(bepStringPool::get)
+                                    .collect(Collectors.toUnmodifiableList()))
+                            .build())
+                .collect(Collectors.toUnmodifiableList()))
+        .build();
   }
 }
